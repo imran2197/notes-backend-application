@@ -7,7 +7,7 @@ app.use(express.json());
 app.use(
   cors({
     credentials: true,
-    origin: ["http://localhost:3000", "https://todonotess.netlify.app"],
+    origin: ["http://localhost:4200", "https://notess-taker.netlify.app"],
   })
 );
 const session = require("express-session");
@@ -104,10 +104,14 @@ app.post("/notes/login", async (req, res) => {
       req.session.userId = existingUser._id; // session
       res.send({
         statusCode: 200,
+        name: existingUser.name,
         message: `User ${existingUser.name} logged in successfully.`,
       });
     } else {
-      res.send({ statusCode: 401, message: "Incorrect email and password" });
+      res.send({
+        statusCode: 401,
+        message: "Incorrect email and password",
+      });
     }
   }
 });
