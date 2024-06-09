@@ -7,7 +7,7 @@ app.use(express.json());
 app.use(
   cors({
     credentials: true,
-    origin: ["http://localhost:3000", "https://todonotess.netlify.app/"],
+    origin: ["http://localhost:3000", "https://todonotess.netlify.app"],
   })
 );
 const session = require("express-session");
