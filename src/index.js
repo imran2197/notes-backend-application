@@ -194,7 +194,7 @@ app.delete("/notes/:id", AuthMiddleware, async (req, res) => {
 });
 
 app.get("/userInfo", async (req, res) => {
-  const user = await usersCollection.findById(req.session.userId);
+  const user = await usersCollection.find({ _id: req.session.userId });
   if (isNullOrUndefined(req.session) || isNullOrUndefined(req.session.userId)) {
     res.send({ statusCode: 400, message: "User does not exists." });
   } else {
