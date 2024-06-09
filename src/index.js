@@ -1,4 +1,4 @@
-const { MongoClient } = require("mongodb");
+const { MongoClient, ObjectId } = require("mongodb");
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -7,7 +7,7 @@ app.use(express.json());
 app.use(
   cors({
     credentials: true,
-    origin: "*",
+    origin: ["http://localhost:3000", "https://todonotess.netlify.app/"],
   })
 );
 const session = require("express-session");
@@ -194,7 +194,9 @@ app.delete("/notes/:id", AuthMiddleware, async (req, res) => {
 });
 
 app.get("/userInfo", async (req, res) => {
-  const user = await usersCollection.find({ _id: req.session.userId });
+  const user = await usersCollection.findOne({
+    _id: new ObjectId(req.session.userId),
+  });
   if (isNullOrUndefined(req.session) || isNullOrUndefined(req.session.userId)) {
     res.send({ statusCode: 400, message: "User does not exists." });
   } else {
