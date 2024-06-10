@@ -10,14 +10,9 @@ app.use(
     origin: ["http://localhost:4200", "https://notess-taker.netlify.app"],
   })
 );
-const session = require("express-session");
-const session_secret = "notes";
-app.use(
-  session({
-    secret: session_secret,
-    cookie: { maxAge: 1 * 60 * 60 * 1000 },
-  })
-);
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
+app.use(cookieParser());
 
 const bcrypt = require("bcrypt");
 const salt = 10;
@@ -78,12 +73,11 @@ app.post("/notes/signup", async (req, res) => {
         });
       }
     });
-    req.session.userId = newUser._id; // session
     res.send({ statusCode: 201, message: "Sign up successful." });
   } else {
     res.send({
       statusCode: 400,
-      message: `Email ${email} already taken. Please choose another email.`,
+      message: `${email} already taken. Please choose another email.`,
     });
   }
 });
@@ -96,16 +90,20 @@ app.post("/notes/login", async (req, res) => {
   if (isNullOrUndefined(existingUser)) {
     res.send({
       statusCode: 400,
-      message: `Email ${email} does not exist. Please signup.`,
+      message: `${email} does not exist. Please signup.`,
     });
   } else {
     const hashedPassword = existingUser.password;
     if (bcrypt.compareSync(password, hashedPassword)) {
-      req.session.userId = existingUser._id; // session
+      const token = jwt.sign({ userId: existingUser._id }, "notes");
+      res.cookie("jwt", token, {
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000,
+      });
       res.send({
         statusCode: 200,
         name: existingUser.name,
-        message: `User ${existingUser.name} logged in successfully.`,
+        message: `${existingUser.name} logged in successfully.`,
       });
     } else {
       res.send({
@@ -117,23 +115,45 @@ app.post("/notes/login", async (req, res) => {
 });
 
 const AuthMiddleware = async (req, res, next) => {
-  if (isNullOrUndefined(req.session) || isNullOrUndefined(req.session.userId)) {
-    res.send({ statusCode: 401, message: "User is not logged In." });
-  } else {
-    next();
+  try {
+    const cookie = req.cookies["jwt"];
+    const decodedJWT = jwt.verify(cookie, "notes");
+    if (!decodedJWT) {
+      res.send({
+        statusCode: 401,
+        message: "Please login and try again.",
+      });
+    } else {
+      res.cookie("decodedJWT", decodedJWT);
+      next();
+    }
+  } catch (err) {
+    res.send({
+      statusCode: 401,
+      message: "Please login and try again.",
+    });
   }
 };
 
 app.get("/notes", AuthMiddleware, async (req, res) => {
-  const allNotes = await notesCollection.find({ userId: req.session.userId });
-  res.send({ statusCode: 200, response: allNotes });
+  if (req.cookies.decodedJWT.userId) {
+    console.log(req.cookies.decodedJWT.userId);
+    const allNotes = await notesCollection
+      .find({
+        userId: new ObjectId(req.cookies.decodedJWT.userId),
+      })
+      .toArray();
+    res.send({ statusCode: 200, response: allNotes });
+  } else {
+    res.send({ statusCode: 401, message: "Please login and try again." });
+  }
 });
 
 app.post("/notes/create", AuthMiddleware, async (req, res) => {
   const body = req.body;
   body.creationTime = new Date();
   body.status = false;
-  body.userId = req.session.userId;
+  body.userId = req.cookies.decodedJWT.userId;
   const newNote = new notesModel(body);
   await notesCollection.insertOne(newNote, (err, res) => {
     if (err) {
@@ -151,8 +171,8 @@ app.put("/notes/:id", AuthMiddleware, async (req, res) => {
   const id = req.params.id;
   try {
     const existingNote = await notesCollection.findOne({
-      _id: id,
-      userId: req.session.userId,
+      _id: new ObjectId(id),
+      userId: new ObjectId(req.cookies.decodedJWT.userId),
     });
     if (isNullOrUndefined(existingNote)) {
       res.send({
@@ -160,11 +180,17 @@ app.put("/notes/:id", AuthMiddleware, async (req, res) => {
         message: "Note does not exist.",
       });
     } else {
-      existingNote.title = title;
-      existingNote.description = description;
       await notesCollection.updateOne(
-        { title: existingNote.title },
-        { title, description },
+        {
+          _id: new ObjectId(id),
+          userId: new ObjectId(req.cookies.decodedJWT.userId),
+        },
+        {
+          $set: {
+            title: title,
+            description: description,
+          },
+        },
         (err, res) => {
           if (err) {
             res.send({
@@ -177,7 +203,10 @@ app.put("/notes/:id", AuthMiddleware, async (req, res) => {
       res.send({ statusCode: 200, message: "Note updated successfully." });
     }
   } catch (err) {
-    res.send({ statusCode: 400, message: "Failed while updating a note." });
+    res.send({
+      statusCode: 400,
+      message: "Failed while updating a note.",
+    });
   }
 });
 
@@ -185,8 +214,8 @@ app.delete("/notes/:id", AuthMiddleware, async (req, res) => {
   const id = req.params.id;
   try {
     await notesCollection.deleteOne({
-      _id: id,
-      userId: req.session.userId,
+      _id: new ObjectId(id),
+      userId: new ObjectId(req.cookies.decodedJWT.userId),
     });
     res.send({ statusCode: 200, message: "Note deleted successfully." });
   } catch (err) {
@@ -197,28 +226,25 @@ app.delete("/notes/:id", AuthMiddleware, async (req, res) => {
   }
 });
 
-app.get("/userInfo", async (req, res) => {
-  const user = await usersCollection.findOne({
-    _id: new ObjectId(req.session.userId),
-  });
-  if (isNullOrUndefined(req.session) || isNullOrUndefined(req.session.userId)) {
-    res.send({ statusCode: 400, message: "User does not exists." });
-  } else {
-    res.send({ statusCode: 200, response: user });
+app.get("/notes/userInfo", AuthMiddleware, async (req, res) => {
+  try {
+    const user = await usersCollection.findOne({
+      _id: new ObjectId(req.cookies.decodedJWT.userId),
+    });
+    const { password, ...data } = await user;
+    res.send(data);
+  } catch (err) {
+    res.send({
+      statusCode: 401,
+      message: "Please login and try again.",
+    });
   }
 });
 
 app.get("/notes/logout", (req, res) => {
-  if (!isNullOrUndefined(req.session)) {
-    req.session.destroy(() => {
-      res.send({ statusCode: 200, message: "User logged out successfully." });
-    });
-  } else {
-    res.send({
-      statusCode: 400,
-      message: "Failed during logout.",
-    });
-  }
+  res.cookie("jwt", "", { maxAge: 0 });
+  res.cookie("decodedJWT", "", { maxAge: 0 });
+  res.send({ statusCode: 200, message: "User logged out successfully." });
 });
 
 app.listen(process.env.PORT || 8080);
