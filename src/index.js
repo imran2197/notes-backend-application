@@ -6,8 +6,13 @@ const app = express();
 app.use(express.json());
 app.use(
   cors({
+    origin: [
+      "http://localhost:4200",
+      "http://localhost:3000",
+      "https://record-notes.netlify.app/",
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
-    origin: ["http://localhost:4200", "https://notess-taker.netlify.app"],
   })
 );
 const jwt = require("jsonwebtoken");
@@ -102,7 +107,6 @@ app.post("/notes/login", async (req, res) => {
       });
       res.send({
         statusCode: 200,
-        name: existingUser.name,
         message: `${existingUser.name} logged in successfully.`,
       });
     } else {
@@ -114,33 +118,32 @@ app.post("/notes/login", async (req, res) => {
   }
 });
 
-const AuthMiddleware = async (req, res, next) => {
-  try {
-    const cookie = req.cookies["jwt"];
-    const decodedJWT = jwt.verify(cookie, "notes");
-    if (!decodedJWT) {
-      res.send({
-        statusCode: 401,
-        message: "Please login and try again.",
-      });
-    } else {
-      res.cookie("decodedJWT", decodedJWT);
-      next();
-    }
-  } catch (err) {
+app.get("/notes/userInfo", async (req, res) => {
+  if (req.cookies.jwt) {
+    console.log("userInfo", req.cookies);
+    const decodedJWT = jwt.verify(req.cookies.jwt, "notes");
+    const user = await usersCollection.findOne({
+      _id: new ObjectId(decodedJWT.userId),
+    });
+    const { password, ...data } = await user;
+    res.send({
+      statusCode: 200,
+      response: data,
+    });
+  } else {
     res.send({
       statusCode: 401,
       message: "Please login and try again.",
     });
   }
-};
+});
 
-app.get("/notes", AuthMiddleware, async (req, res) => {
-  if (req.cookies.decodedJWT.userId) {
-    console.log(req.cookies.decodedJWT.userId);
+app.get("/notes", async (req, res) => {
+  if (req.cookies.jwt) {
+    const decodedJWT = jwt.verify(req.cookies.jwt, "notes");
     const allNotes = await notesCollection
       .find({
-        userId: new ObjectId(req.cookies.decodedJWT.userId),
+        userId: new ObjectId(decodedJWT.userId),
       })
       .toArray();
     res.send({ statusCode: 200, response: allNotes });
@@ -149,30 +152,36 @@ app.get("/notes", AuthMiddleware, async (req, res) => {
   }
 });
 
-app.post("/notes/create", AuthMiddleware, async (req, res) => {
-  const body = req.body;
-  body.creationTime = new Date();
-  body.status = false;
-  body.userId = req.cookies.decodedJWT.userId;
-  const newNote = new notesModel(body);
-  await notesCollection.insertOne(newNote, (err, res) => {
-    if (err) {
-      res.send({
-        statusCode: 400,
-        message: "Failed while adding new note.",
-      });
-    }
-  });
-  res.send({ statusCode: 201, message: "New note added successfully." });
+app.post("/notes/create", async (req, res) => {
+  if (req.cookies.jwt) {
+    const decodedJWT = jwt.verify(req.cookies.jwt, "notes");
+    const body = req.body;
+    body.creationTime = new Date();
+    body.status = false;
+    body.userId = decodedJWT.userId;
+    const newNote = new notesModel(body);
+    await notesCollection.insertOne(newNote, (err, res) => {
+      if (err) {
+        res.send({
+          statusCode: 400,
+          message: "Failed while adding new note.",
+        });
+      }
+    });
+    res.send({ statusCode: 201, message: "New note added successfully." });
+  } else {
+    res.send({ statusCode: 401, message: "Please login and try again." });
+  }
 });
 
-app.put("/notes/:id", AuthMiddleware, async (req, res) => {
-  const { title, description } = req.body;
-  const id = req.params.id;
-  try {
+app.put("/notes/:id", async (req, res) => {
+  if (req.cookies.jwt) {
+    const decodedJWT = jwt.verify(req.cookies.jwt, "notes");
+    const { title, description } = req.body;
+    const id = req.params.id;
     const existingNote = await notesCollection.findOne({
       _id: new ObjectId(id),
-      userId: new ObjectId(req.cookies.decodedJWT.userId),
+      userId: new ObjectId(decodedJWT.userId),
     });
     if (isNullOrUndefined(existingNote)) {
       res.send({
@@ -183,7 +192,7 @@ app.put("/notes/:id", AuthMiddleware, async (req, res) => {
       await notesCollection.updateOne(
         {
           _id: new ObjectId(id),
-          userId: new ObjectId(req.cookies.decodedJWT.userId),
+          userId: new ObjectId(decodedJWT.userId),
         },
         {
           $set: {
@@ -202,42 +211,22 @@ app.put("/notes/:id", AuthMiddleware, async (req, res) => {
       );
       res.send({ statusCode: 200, message: "Note updated successfully." });
     }
-  } catch (err) {
-    res.send({
-      statusCode: 400,
-      message: "Failed while updating a note.",
-    });
+  } else {
+    res.send({ statusCode: 401, message: "Please login and try again." });
   }
 });
 
-app.delete("/notes/:id", AuthMiddleware, async (req, res) => {
-  const id = req.params.id;
-  try {
+app.delete("/notes/:id", async (req, res) => {
+  if (req.cookies.jwt) {
+    const decodedJWT = jwt.verify(req.cookies.jwt, "notes");
+    const id = req.params.id;
     await notesCollection.deleteOne({
       _id: new ObjectId(id),
-      userId: new ObjectId(req.cookies.decodedJWT.userId),
+      userId: new ObjectId(decodedJWT.userId),
     });
     res.send({ statusCode: 200, message: "Note deleted successfully." });
-  } catch (err) {
-    res.send({
-      statusCode: 404,
-      message: "Note does not exist.",
-    });
-  }
-});
-
-app.get("/notes/userInfo", AuthMiddleware, async (req, res) => {
-  try {
-    const user = await usersCollection.findOne({
-      _id: new ObjectId(req.cookies.decodedJWT.userId),
-    });
-    const { password, ...data } = await user;
-    res.send(data);
-  } catch (err) {
-    res.send({
-      statusCode: 401,
-      message: "Please login and try again.",
-    });
+  } else {
+    res.send({ statusCode: 401, message: "Please login and try again." });
   }
 });
 
