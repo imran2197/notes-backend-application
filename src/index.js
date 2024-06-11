@@ -100,6 +100,9 @@ app.post("/notes/login", async (req, res) => {
       res.cookie("jwt", token, {
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
+        sameSite: "none",
+        secure: true,
+        domain: "https://record-notes.netlify.app",
       });
       res.send({
         statusCode: 200,
