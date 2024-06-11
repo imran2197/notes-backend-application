@@ -6,7 +6,11 @@ const app = express();
 app.use(express.json());
 app.use(
   cors({
-    origin: ["http://localhost:4200", "https://record-notes.netlify.app"],
+    origin: [
+      "http://localhost:4200",
+      "https://record-notes.netlify.app",
+      "https://notes-taker-ewjvxelx1-imran2197s-projects.vercel.app",
+    ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
@@ -102,7 +106,6 @@ app.post("/notes/login", async (req, res) => {
         maxAge: 24 * 60 * 60 * 1000,
         sameSite: "none",
         secure: true,
-        domain: "https://record-notes.netlify.app",
       });
       res.send({
         statusCode: 200,
