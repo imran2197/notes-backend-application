@@ -6,12 +6,7 @@ const app = express();
 app.use(express.json());
 app.use(
   cors({
-    origin: [
-      "http://localhost:4200",
-      "http://localhost:3000",
-      "https://record-notes.netlify.app/",
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: ["http://localhost:4200", "https://record-notes.netlify.app"],
     credentials: true,
   })
 );
