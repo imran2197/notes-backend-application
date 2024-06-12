@@ -9,7 +9,7 @@ app.use(
     origin: [
       "http://localhost:4200",
       "https://record-notes.netlify.app",
-      "https://notes-taker-ewjvxelx1-imran2197s-projects.vercel.app",
+      "https://notes-taker-theta.vercel.app",
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
