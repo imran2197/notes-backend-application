@@ -233,8 +233,7 @@ app.delete("/notes/:id", async (req, res) => {
 });
 
 app.get("/notes/logout", (req, res) => {
-  res.cookie("jwt", "", { maxAge: 0 });
-  res.cookie("decodedJWT", "", { maxAge: 0 });
+  res.clearCookie("jwt", { maxAge: 0 });
   res.send({ statusCode: 200, message: "User logged out successfully." });
 });
 
