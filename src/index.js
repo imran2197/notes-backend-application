@@ -50,7 +50,8 @@ const noteSchema = new mongoose.Schema({
   title: String,
   description: String,
   creationTime: Date,
-  status: Boolean,
+  status: String,
+  deleted: Boolean,
   userId: mongoose.Schema.Types.ObjectId,
 });
 
@@ -140,12 +141,14 @@ app.get("/notes/userInfo", async (req, res) => {
   }
 });
 
-app.get("/notes", async (req, res) => {
+app.post("/notes", async (req, res) => {
   if (req.cookies.jwt) {
     const decodedJWT = jwt.verify(req.cookies.jwt, "notes");
     const allNotes = await notesCollection
       .find({
         userId: new ObjectId(decodedJWT.userId),
+        status: req.body.status,
+        deleted: req.body.deleted,
       })
       .toArray();
     res.send({ statusCode: 200, response: allNotes });
@@ -159,7 +162,8 @@ app.post("/notes/create", async (req, res) => {
     const decodedJWT = jwt.verify(req.cookies.jwt, "notes");
     const body = req.body;
     body.creationTime = new Date();
-    body.status = false;
+    body.status = "inprogress";
+    body.deleted = false;
     body.userId = decodedJWT.userId;
     const newNote = new notesModel(body);
     await notesCollection.insertOne(newNote, (err, res) => {
@@ -176,11 +180,10 @@ app.post("/notes/create", async (req, res) => {
   }
 });
 
-app.put("/notes/:id", async (req, res) => {
+app.put("/notes/update", async (req, res) => {
   if (req.cookies.jwt) {
     const decodedJWT = jwt.verify(req.cookies.jwt, "notes");
-    const { title, description } = req.body;
-    const id = req.params.id;
+    const { title, description, status, id } = req.body;
     const existingNote = await notesCollection.findOne({
       _id: new ObjectId(id),
       userId: new ObjectId(decodedJWT.userId),
@@ -200,6 +203,7 @@ app.put("/notes/:id", async (req, res) => {
           $set: {
             title: title,
             description: description,
+            status: status,
           },
         },
         (err, res) => {
@@ -218,15 +222,49 @@ app.put("/notes/:id", async (req, res) => {
   }
 });
 
-app.delete("/notes/:id", async (req, res) => {
+// updating the delete flag as true for deleting the note.
+app.put("/notes/delete", async (req, res) => {
   if (req.cookies.jwt) {
     const decodedJWT = jwt.verify(req.cookies.jwt, "notes");
-    const id = req.params.id;
-    await notesCollection.deleteOne({
+    const { id, deleted } = req.body;
+    // const id = req.params.id;
+    const existingNote = await notesCollection.findOne({
       _id: new ObjectId(id),
       userId: new ObjectId(decodedJWT.userId),
     });
-    res.send({ statusCode: 200, message: "Note deleted successfully." });
+    if (isNullOrUndefined(existingNote)) {
+      res.send({
+        statusCode: 404,
+        message: "Note does not exist.",
+      });
+    } else {
+      await notesCollection.updateOne(
+        {
+          _id: new ObjectId(id),
+          userId: new ObjectId(decodedJWT.userId),
+        },
+        {
+          $set: {
+            status: "inprogress",
+            deleted: deleted,
+          },
+        },
+        (err, res) => {
+          if (err) {
+            res.send({
+              statusCode: 400,
+              message: "Failed while deleting a note.",
+            });
+          }
+        }
+      );
+      res.send({
+        statusCode: 200,
+        message: deleted
+          ? "Note deleted successfully."
+          : "Note moved to In Progress",
+      });
+    }
   } else {
     res.send({ statusCode: 401, message: "Please login and try again." });
   }
