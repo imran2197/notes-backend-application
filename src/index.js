@@ -270,6 +270,24 @@ app.put("/notes/delete", async (req, res) => {
   }
 });
 
+// Delete recently deleted notes permanently
+app.delete("/notes/deleteAll", async (req, res) => {
+  if (req.cookies.jwt) {
+    const decodedJWT = jwt.verify(req.cookies.jwt, "notes");
+    console.log(decodedJWT);
+    await notesCollection.deleteMany({
+      userId: new ObjectId(decodedJWT.userId),
+      deleted: true,
+    });
+    res.send({
+      statusCode: 200,
+      message: "Recently notes deleted successfully",
+    });
+  } else {
+    res.send({ statusCode: 401, message: "Please login and try again." });
+  }
+});
+
 app.get("/notes/logout", (req, res) => {
   res.cookie("jwt", "", {
     maxAge: 0,
