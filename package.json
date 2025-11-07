@@ -1,26 +1,14 @@
 {
   "name": "notes-backend",
   "version": "1.0.0",
-  "description": "A simple Notes backend built with Node.js, Express, and MongoDB.",
-  "main": "src/index.js",
+  "main": "index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "build": "echo 'No build step needed for backend'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "engines": {
-    "node": ">=18.x"
-  },
-  "keywords": [
-    "express",
-    "node",
-    "backend",
-    "notes-app",
-    "api"
-  ],
-  "author": "Your Name",
+  "author": "",
   "license": "ISC",
+  "description": "",
   "dependencies": {
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.6",
@@ -28,9 +16,7 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.7.0",
-    "mongoose": "^8.4.1"
-  },
-  "devDependencies": {
+    "mongoose": "^8.4.1",
     "nodemon": "^3.1.3"
   }
 }
