@@ -107,10 +107,12 @@ app.post("/notes/login", async (req, res) => {
         maxAge: 24 * 60 * 60 * 1000,
         sameSite: "none",
         secure: true,
+        path: "/",
       });
       res.send({
         statusCode: 200,
         message: `${existingUser.name} logged in successfully.`,
+        token: token,
       });
     } else {
       res.send({
@@ -122,17 +124,38 @@ app.post("/notes/login", async (req, res) => {
 });
 
 app.get("/notes/userInfo", async (req, res) => {
-  if (req.cookies.jwt) {
-    console.log("userInfo", req.cookies);
-    const decodedJWT = jwt.verify(req.cookies.jwt, "notes");
-    const user = await usersCollection.findOne({
-      _id: new ObjectId(decodedJWT.userId),
-    });
-    const { password, ...data } = await user;
-    res.send({
-      statusCode: 200,
-      response: data,
-    });
+  let token = req.cookies.jwt;
+  
+  // Fallback: check Authorization header if cookie not found
+  if (!token && req.headers.authorization) {
+    token = req.headers.authorization.split(" ")[1];
+  }
+  
+  if (token) {
+    try {
+      console.log("userInfo", req.cookies);
+      const decodedJWT = jwt.verify(token, "notes");
+      const user = await usersCollection.findOne({
+        _id: new ObjectId(decodedJWT.userId),
+      });
+      if (!isNullOrUndefined(user)) {
+        const { password, ...data } = user;
+        res.send({
+          statusCode: 200,
+          response: data,
+        });
+      } else {
+        res.send({
+          statusCode: 404,
+          message: "User not found.",
+        });
+      }
+    } catch (error) {
+      res.send({
+        statusCode: 401,
+        message: "Invalid token. Please login and try again.",
+      });
+    }
   } else {
     res.send({
       statusCode: 401,
